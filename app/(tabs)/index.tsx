@@ -2,26 +2,40 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text } from "react-native";
 import WeatherWarning from "../components/WeatherWarning";
+import { useSettings } from "../context/SettingsContext";
 
-type Warning = {
+type WarningData = {
   id: string;
-  title: string;
+  title: {
+    sv: string;
+    en: string;
+  };
   description: string;
   severity: string;
   approximateStart: number | string;
   approximateEnd: number | string;
+  areaCode?: string;
 };
 
 const ENDPOINT =
   "https://opendata-download-warnings.smhi.se/ibww/api/version/1/warning.json";
 
 export default function Index() {
-  const [warnings, setWarnings] = useState<Warning[]>([]);
+  const [warnings, setWarnings] = useState<WarningData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { language } = useSettings();
+
+  const titleText =
+    language === "en"
+      ? "Current weather warnings in Sweden:"
+      : "Aktuella vädervarningar i Sverige:";
+
+  const loadingText =
+    language === "en" ? "Loading warnings..." : "Laddar varningar...";
+  const errorPrefix = language === "en" ? "Error: " : "Fel: ";
 
   useEffect(() => {
-    // Track if component is still mounted to prevent updating state after unmount
     let isMounted = true;
 
     const loadWarnings = async () => {
@@ -70,14 +84,15 @@ export default function Index() {
       style={styles.container}
     >
       <Text style={[styles.title, { marginTop: 15, marginBottom: 15 }]}>
-        Aktuella vädervarningar i Sverige:
+        {titleText}
       </Text>
       {loading ? (
-        <Text style={[styles.status, { marginTop: 10 }]}>
-          Laddar varningar...
-        </Text>
+        <Text style={[styles.status, { marginTop: 10 }]}>{loadingText}</Text>
       ) : error ? (
-        <Text style={[styles.status, { marginTop: 10 }]}>Fel: {error}</Text>
+        <Text style={[styles.status, { marginTop: 10 }]}>
+          {errorPrefix}
+          {error}
+        </Text>
       ) : (
         <ScrollView contentContainerStyle={styles.list}>
           {warnings.map((warning) => (
@@ -89,13 +104,13 @@ export default function Index() {
   );
 }
 
-// function that parses api data into an array of Warning objects
-function mapSmhiWarnings(data: unknown): Warning[] {
+// function that parses api data into an array of WarningData objects
+function mapSmhiWarnings(data: unknown): WarningData[] {
   if (!Array.isArray(data)) {
     return [];
   }
 
-  const warnings: Warning[] = [];
+  const warnings: WarningData[] = [];
 
   // go through each weather event in the data array
   data.forEach((event: any) => {
@@ -103,11 +118,16 @@ function mapSmhiWarnings(data: unknown): Warning[] {
 
     // loop through each warning area (each area is a separate warning)
     warningAreas.forEach((area: any) => {
-      const eventName = event.event?.sv || event.event?.en || "Vädervarning";
-      const areaName = area.areaName?.sv || area.areaName?.en || "";
+      // Get title in both languages
+      const eventNameSv = event.event?.sv || "Vädervarning";
+      const eventNameEn = event.event?.en || "Weather Warning";
+      const areaNameSv = area.areaName?.sv || "";
+      const areaNameEn = area.areaName?.en || "";
+
       const approximateStart = area.approximateStart || Date.now();
       const approximateEnd = area.approximateEnd || "Okänt slutdatum";
       const level = area.warningLevel?.code || "YELLOW";
+      const areaCode = area.areaCode || "";
 
       let descriptionText = "";
       if (area.descriptions && area.descriptions.length > 0) {
@@ -120,11 +140,15 @@ function mapSmhiWarnings(data: unknown): Warning[] {
 
       warnings.push({
         id: String(area.id), // convert area ID to string
-        title: `${eventName} - ${areaName}`, // combine event and area names
+        title: {
+          sv: `${eventNameSv} - ${areaNameSv}`,
+          en: `${eventNameEn} - ${areaNameEn}`,
+        },
         description: descriptionText,
         severity: level.toLowerCase(), // convert severity to lowercase (yellow/orange/red)
-        approximateStart: `Börjar: ${approximateStart}`,
-        approximateEnd: `Slutar: ${approximateEnd}`,
+        approximateStart: approximateStart,
+        approximateEnd: approximateEnd,
+        areaCode: areaCode, // store area code for county-based filtering
       });
     });
   });

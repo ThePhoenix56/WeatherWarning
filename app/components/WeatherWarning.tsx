@@ -1,18 +1,27 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { StyleSheet, Text } from "react-native";
+import { formatDate, getText, useSettings } from "../context/SettingsContext";
 
-interface Warning {
+interface WarningData {
   id: string;
-  title: string;
+  title: {
+    sv: string;
+    en: string;
+  };
   description: string;
   severity: string;
   approximateStart: number | string;
   approximateEnd: number | string;
 }
 
-export default function WeatherWarning({ warning }: { warning: Warning }) {
-  const startText = formatSwedishDate(warning.approximateStart);
-  const endText = formatSwedishDate(warning.approximateEnd);
+export default function WeatherWarning({ warning }: { warning: WarningData }) {
+  const { language } = useSettings();
+  const startText = formatDate(warning.approximateStart, language);
+  const endText = formatDate(warning.approximateEnd, language);
+  const displayTitle = getText(warning.title.sv, warning.title.en, language);
+
+  const startsLabel = language === "en" ? "Starts:" : "Börjar:";
+  const endsLabel = language === "en" ? "Ends:" : "Slutar:";
 
   return (
     <LinearGradient
@@ -24,44 +33,16 @@ export default function WeatherWarning({ warning }: { warning: Warning }) {
         { borderLeftColor: getSeverityColor(warning.severity) },
       ]}
     >
-      <Text style={styles.title}>{warning.title}</Text>
+      <Text style={styles.title}>{displayTitle}</Text>
       <Text style={styles.description}>{warning.description}</Text>
-      <Text style={styles.time}>Börjar: {startText}</Text>
-      <Text style={styles.time}>Slutar: {endText}</Text>
+      <Text style={styles.time}>
+        {startsLabel} {startText}
+      </Text>
+      <Text style={styles.time}>
+        {endsLabel} {endText}
+      </Text>
     </LinearGradient>
   );
-}
-
-function formatSwedishDate(value: number | string): string {
-  const rawValue =
-    typeof value === "string"
-      ? value
-          .replace(/^Börjar:\s*/i, "")
-          .replace(/^Slutar:\s*/i, "")
-          .trim()
-      : value;
-
-  const date = new Date(rawValue);
-  if (Number.isNaN(date.getTime())) {
-    return "Okänt datum";
-  }
-
-  const datePart = new Intl.DateTimeFormat("sv-SE", {
-    timeZone: "Europe/Stockholm",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
-
-  const timePart = new Intl.DateTimeFormat("sv-SE", {
-    timeZone: "Europe/Stockholm",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).format(date);
-
-  return `${datePart} kl. ${timePart} svensk tid`;
 }
 
 function getSeverityColor(severity: string) {
