@@ -14,7 +14,33 @@ type WarningData = {
   severity: string;
   approximateStart: number | string;
   approximateEnd: number | string;
-  areaCode?: string;
+  affectedAreaIds: number[]; // SMHI area IDs from affectedAreas
+};
+
+// mapping of SMHI area IDs to county codes
+const SMHI_AREA_ID_TO_COUNTY: { [key: number]: string } = {
+  1: "AB", // Stockholm
+  2: "C", // Uppsala
+  3: "BD", // Sörmland
+  4: "AC", // Västmanland
+  5: "E", // Gävleborg
+  6: "D", // Värmland
+  7: "U", // Dalarna
+  8: "T", // Örebro
+  9: "H", // Västergötland
+  10: "O", // Jönköping
+  11: "I", // Halland
+  12: "N", // Skåne
+  13: "K", // Kalmar
+  14: "L", // Kronoberg
+  15: "M", // Blekinge
+  16: "S", // Västra Götaland
+  17: "W", // Dalarna (alternative code)
+  18: "G", // Jämtland
+  19: "X", // Västerbotten
+  20: "Y", // Norrbotten
+  21: "Z", // Gotland
+  22: "F", // Västernorrland
 };
 
 const ENDPOINT =
@@ -137,7 +163,12 @@ function mapSmhiWarnings(data: unknown): WarningData[] {
       const approximateStart = area.approximateStart || Date.now();
       const approximateEnd = area.approximateEnd || "Okänt slutdatum";
       const level = area.warningLevel?.code || "YELLOW";
-      const areaCode = area.areaCode || ""; // Area code for filtering by county
+
+      // extract affected area IDs from the affectedAreas array
+      const affectedAreas = area.affectedAreas || [];
+      const affectedAreaIds = affectedAreas
+        .map((areaObj: any) => areaObj.id)
+        .filter((id: any) => id !== undefined && id !== null);
 
       let descriptionText = "";
       if (area.descriptions && area.descriptions.length > 0) {
@@ -149,7 +180,7 @@ function mapSmhiWarnings(data: unknown): WarningData[] {
       }
 
       warnings.push({
-        id: String(area.id), // convert area ID to string
+        id: `${area.id}`, // use area ID as the unique identifier
         title: {
           sv: `${eventNameSv} - ${areaNameSv}`, // swedish title with event and area names
           en: `${eventNameEn} - ${areaNameEn}`, // english title with event and area names
@@ -158,7 +189,7 @@ function mapSmhiWarnings(data: unknown): WarningData[] {
         severity: level.toLowerCase(), // convert severity to lowercase (yellow/orange/red)
         approximateStart: approximateStart,
         approximateEnd: approximateEnd,
-        areaCode: areaCode, // store area code for county-based filtering
+        affectedAreaIds: affectedAreaIds, // store affected area IDs for county-based filtering
       });
     });
   });
@@ -185,18 +216,20 @@ function mapSmhiWarnings(data: unknown): WarningData[] {
   return warnings;
 }
 
-// filter warnings by county using area code
+// filter warnings by county using affected area IDs
 function filterWarningsByCounty(
   warnings: WarningData[],
   countyCode: string,
 ): WarningData[] {
-  // filter warnings whose areaCode starts with the county code (area codes are formatted as "county-region")
+  // filter warnings that have affected areas matching the selected county code
   return warnings.filter((warning) => {
-    if (!warning.areaCode) {
+    if (!warning.affectedAreaIds || warning.affectedAreaIds.length === 0) {
       return false;
     }
-    // area codes are typically formatted like "AB01", "AB02", etc where AB is the county code
-    return warning.areaCode.startsWith(countyCode);
+    // check if any of the affected area IDs map to the selected county code
+    return warning.affectedAreaIds.some((areaId) => {
+      return SMHI_AREA_ID_TO_COUNTY[areaId] === countyCode;
+    });
   });
 }
 
